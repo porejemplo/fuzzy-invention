@@ -1,0 +1,4 @@
+.varant/
+
+# Ignore db files
+*.db
