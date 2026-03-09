@@ -1,4 +1,6 @@
 import sqlite3
+import logging
+import sys
 
 from flask import Flask, jsonify, json, render_template, request, url_for, redirect, flash
 from werkzeug.exceptions import abort
@@ -22,12 +24,28 @@ def get_post(post_id):
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your secret key'
 
+# Set up logging to a stdout and file
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.setLevel(logging.DEBUG)
+stdout_handler.setFormatter(formatter)
+
+file_handler = logging.FileHandler('app.log')
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(formatter)
+
+app.logger.addHandler(stdout_handler)
+app.logger.addHandler(file_handler)
+app.logger.setLevel(logging.DEBUG)
+
 # Define the main route of the web application 
 @app.route('/')
 def index():
     connection = get_db_connection()
     posts = connection.execute('SELECT * FROM posts').fetchall()
     connection.close()
+    app.logger.info('Main request successfull')
     return render_template('index.html', posts=posts)
 
 # Define how each individual article is rendered 
@@ -36,13 +54,16 @@ def index():
 def post(post_id):
     post = get_post(post_id)
     if post is None:
+      app.logger.error('Post with id "%s" not found', post_id)
       return render_template('404.html'), 404
     else:
+      app.logger.info('Post "%s" retrieved!', post['title'])
       return render_template('post.html', post=post)
 
 # Define the About Us page
 @app.route('/about')
 def about():
+    app.logger.info('About Us page retrieved')
     return render_template('about.html')
 
 # Define the post creation functionality 
@@ -61,9 +82,34 @@ def create():
             connection.commit()
             connection.close()
 
+            app.logger.info('Article "%s" created!', title)
             return redirect(url_for('index'))
 
     return render_template('create.html')
+
+@app.route('/healthz')
+def healthz():
+    response = app.response_class(
+            response=json.dumps({"result":"OK - healthy"}),
+            status=200,
+            mimetype='application/json'
+    )
+
+    return response
+
+@app.route('/metrics')
+def metrics():
+    connection = get_db_connection()
+    post_count = connection.execute('SELECT COUNT(*) FROM posts').fetchone()[0]
+    connection.close()
+
+    response = app.response_class(
+            response=json.dumps({"db_connection_count": 1, "post_count": post_count}),
+            status=200,
+            mimetype='application/json'
+    )
+
+    return response
 
 # start the application on port 3111
 if __name__ == "__main__":
