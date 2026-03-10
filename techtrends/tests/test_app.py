@@ -1,6 +1,10 @@
 import os
 import sqlite3
 import pytest
+import sys
+import logging
+from io import StringIO
+from unittest.mock import patch
 from techtrends.app import app
 
 @pytest.fixture
@@ -13,9 +17,13 @@ def client():
     import techtrends.app as tech_app
     original_get_db_connection = tech_app.get_db_connection
     
+    # Reset connection count for each test
+    tech_app.db_connection_count = 0
+    
     def get_test_db_connection():
         connection = sqlite3.connect(db_path)
         connection.row_factory = sqlite3.Row
+        tech_app.db_connection_count += 1
         return connection
     
     tech_app.get_db_connection = get_test_db_connection
@@ -98,7 +106,42 @@ def test_metrics(client):
     response = client.get('/metrics')
     assert response.status_code == 200
     assert b'post_count' in response.data
-    assert b'1' in response.data # We added one post in fixture
+    assert b'db_connection_count' in response.data
+
+def test_db_connection_count_increment(client):
+    """Test that db_connection_count increments with each request that accesses the DB."""
+    response = client.get('/metrics')
+    data = response.get_json()
+    initial_count = data['db_connection_count']
+    assert initial_count >= 1
+    
+    # 1. Access home page (accesses DB once)
+    client.get('/')
+    
+    # 2. Access a post (accesses DB once via get_post)
+    client.get('/1')
+    
+    # 3. Check metrics again
+    response = client.get('/metrics')
+    data = response.get_json()
+    
+    assert data['db_connection_count'] == initial_count + 3
+
+def test_post_count_increment(client):
+    """Test that post_count increments when a new post is created."""
+    response = client.get('/metrics')
+    initial_post_count = response.get_json()['post_count']
+    
+    # 1. Create a new post
+    client.post('/create', data={
+        'title': 'Another Test Post',
+        'content': 'Another Test Content'
+    })
+    
+    response = client.get('/metrics')
+    new_post_count = response.get_json()['post_count']
+    
+    assert new_post_count == initial_post_count + 1
 
 def test_healthz_unhealthy(client):
     """Test healthz endpoint returns 500 when database is missing."""
