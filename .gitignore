@@ -1,4 +1,9 @@
-.varant/
-
-# Ignore db files
+.vagrant/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*$py.class
+app.log
 *.db
+.env
+.DS_Store

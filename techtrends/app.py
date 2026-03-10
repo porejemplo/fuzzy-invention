@@ -89,11 +89,21 @@ def create():
 
 @app.route('/healthz')
 def healthz():
-    response = app.response_class(
-            response=json.dumps({"result":"OK - healthy"}),
-            status=200,
-            mimetype='application/json'
-    )
+    try:
+        connection = get_db_connection()
+        connection.execute('SELECT 1 FROM posts LIMIT 1').fetchone()
+        connection.close()
+        response = app.response_class(
+                response=json.dumps({"result":"OK - healthy"}),
+                status=200,
+                mimetype='application/json'
+        )
+    except Exception:
+        response = app.response_class(
+                response=json.dumps({"result":"ERROR - unhealthy"}),
+                status=500,
+                mimetype='application/json'
+        )
 
     return response
 
