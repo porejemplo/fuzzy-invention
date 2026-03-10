@@ -4,8 +4,19 @@ ENV["TERM"]="linux"
 # set minimum version for Vagrant
 Vagrant.require_version ">= 2.2.10"
 Vagrant.configure("2") do |config|
-  config.vm.provision "shell",
-    inline: "sudo su - && zypper update && zypper install -y apparmor-parser"
+  config.vm.provision "shell", inline: <<-SHELL
+    # Update and install dependencies
+    zypper --non-interactive update
+    zypper --non-interactive install git curl apparmor-parser
+
+    # Install k3s (Kubernetes)
+    curl -sfL https://get.k3s.io | sh -
+    
+    # Allow the vagrant user to use kubectl without sudo
+    mkdir -p /home/vagrant/.kube
+    cp /etc/rancher/k3s/k3s.yaml /home/vagrant/.kube/config
+    chown vagrant:vagrant /home/vagrant/.kube/config
+  SHELL
   
   # Set the image for the vagrant box
   config.vm.box = "opensuse/Leap-15.2.x86_64"
